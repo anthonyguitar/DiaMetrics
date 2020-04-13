@@ -1,9 +1,5 @@
 import math
 import numpy as np
-
-class DiaMetricsLearner:
-   def __init__(self):
-      self.__version__ = '0.0.1'
       
 class BGEnvironment_v0:
    """
