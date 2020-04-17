@@ -53,7 +53,7 @@ def gen_neighbors(S, i, jump):
 # Breakfast is at 8:00 AM, We take insulin at 8:05 AM
 # Then nothing happens the rest of the day
 start_time = datetime.datetime(2020, 1, 1, 8, 0, 0)
-end_time   = datetime.datetime(2020, 1, 1, 13, 0, 0)
+end_time   = datetime.datetime(2020, 1, 1, 15, 0, 0)
 time_axis  = (end_time - start_time).total_seconds()/300
 
 # create time axis
@@ -83,7 +83,8 @@ time_to_peak = 60.0 # in minutes
 insulin_activation_speed = 1.0
 injection = take_insulin(start_time, injection_time, insulin, insulin_bg_ratio, 
                          time_to_peak, insulin_activation_speed, t)
-
+                         
+                        
 # add meal that happens at 12:00
 lunch_time = datetime.datetime(2020, 1, 1, 11, 0, 0)
 lunch_carbs = 9.0
@@ -92,8 +93,14 @@ time_to_breakdown = 45.0 # in minutes
 lunch = eat_meal(start_time, lunch_time, lunch_carbs, carb_bg_ratio, 
                  time_to_breakdown, carb_digestion_speed, t)
 
+# take insulin for lunch
+injection_time_lunch = datetime.datetime(2020, 1, 1, 10, 30, 0)
+insulin_lunch = 0.5
+injection_lunch = take_insulin(start_time, injection_time_lunch, insulin_lunch, insulin_bg_ratio, 
+                         time_to_peak, insulin_activation_speed, t)
+
 # add true observation to graph
-observed_event = starting_bg + basal + breakfast + lunch - injection
+observed_event = starting_bg + basal + breakfast + lunch - injection - injection_lunch
 
 # now pretend like we don't have insulin ratio
 carb_bg_ratio     = 5.0
@@ -113,7 +120,8 @@ basal     = basal_effect(S[4], t)
 breakfast = eat_meal(start_time, breakfast_time, carbs, S[0], S[1], S[5], t)
 lunch     = eat_meal(start_time, lunch_time, lunch_carbs, S[0], S[1], S[5], t)
 injection = take_insulin(start_time, injection_time, insulin, S[2], S[3], S[6], t)
-estimate  = starting_bg + basal + breakfast +lunch - injection
+injection_lunch = take_insulin(start_time, injection_time_lunch, insulin_lunch, S[2], S[3], S[6], t)
+estimate  = starting_bg + basal + breakfast +lunch - injection - injection_lunch
 error     = np.average(np.square(observed_event - estimate))
 
 # hyper-parameters
@@ -132,17 +140,22 @@ for k in range(KMAX):
    # find possible neighbors
    
    # choose random neighbor
-   r_mask = np.random.randint(0, 2, 7)
-   r_exp  = np.random.randint(0, 2, 7)
+   r_mask  = np.random.randint(0, 2, 7)
+   r_exp   = np.random.randint(0, 2, 7)
    changes = r_mask*attr_factors*np.power(-1.0, r_exp)
-   Sp = S + changes
+   Sp      = S + changes
+   basal_C = Sp[4]
+   Sp      = np.maximum(Sp, 0.0)
+   Sp[4]   = basal_C
+   
    
    # implement the neighbor      
    basal     = basal_effect(Sp[4], t)
    breakfast = eat_meal(start_time, breakfast_time, carbs, Sp[0], Sp[1], Sp[5], t)
    lunch     = eat_meal(start_time, lunch_time, lunch_carbs, Sp[0], Sp[1], Sp[5], t)
    injection = take_insulin(start_time, injection_time, insulin, Sp[2], Sp[3], Sp[6], t)
-   estimate  = starting_bg + basal + breakfast + lunch - injection
+   injection_lunch = take_insulin(start_time, injection_time_lunch, insulin_lunch, Sp[2], Sp[3], Sp[6], t)
+   estimate  = starting_bg + basal + breakfast + lunch - injection - injection_lunch
    new_error = np.average(np.square(observed_event - estimate))
    
    # choose neighbor with prob 1 - exp(delta(E)/kT))
@@ -152,8 +165,8 @@ for k in range(KMAX):
    if deltaE <= 0 or rnums[k] < P:
       S = Sp
       error = new_error
-   if k % 25000 == 0:
-      plt.plot(t, estimate, label='SA {0}'.format(k/25000))
+   #if k % 25000 == 0:
+   #   plt.plot(t, estimate, label='SA {0}'.format(k/25000))
   
    errors.append(error)
 
@@ -165,7 +178,8 @@ basal     = basal_effect(S[4], t)
 breakfast = eat_meal(start_time, breakfast_time, carbs, S[0], S[1], S[5], t)
 lunch     = eat_meal(start_time, lunch_time, lunch_carbs, S[0], S[1], S[5], t)
 injection = take_insulin(start_time, injection_time, insulin, S[2], S[3], S[6], t)
-estimate  = starting_bg + basal + breakfast + lunch - injection
+injection_lunch = take_insulin(start_time, injection_time_lunch, insulin_lunch, S[2], S[3], S[6], t)
+estimate  = starting_bg + basal + breakfast + lunch - injection - injection_lunch
 
 plt.plot(t, observed_event, label='Truth')
 plt.plot(t, estimate, label='Final SA')
