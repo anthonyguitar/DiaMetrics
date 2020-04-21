@@ -23,6 +23,8 @@ class SigmoidFitProblem:
     time_data  -- The time axis, each tick is 5 minute interval.
     bg_data    -- List of blood sugar readings. There is one reading per 5
                   minutes during the episode.
+    S          -- State containing the parameters of the best fit for
+                  sigmoids.
     """
 
 
@@ -39,9 +41,11 @@ class SigmoidFitProblem:
         self.bg_initial = bg_initial
         self.meals = []
         self.injections = []
+        
         time_axis = (end_time - start_time).total_seconds() / 300.0
         self.time_data = np.arange(0, time_axis, 1.0)
         self.bg_data = np.zeros(self.time_data.shape)
+        self.attr_factors = [0.025, 0.5, 0.5, 0.5, 0.025, 0.05, 0.05]
 
     def add_meal(self, meal_time, carbs):
         """Add a meal to the problem.
@@ -73,45 +77,42 @@ class SigmoidFitProblem:
             self.bg_data = data
 
     def init_paramters(self):
-        # TODO doc_string here
-        # TODO add params to class docstring
-        # now pretend like we don't have insulin ratio
-        self.carb_bg_ratio = 5.0
-        self.time_to_breakdown = 45.0
-        self.insulin_bg_ratio = 50.0
-        self.time_to_peak = 45.0
-        self.basal_rate = 0.0
-        self.digestion_speed = 1.0
-        self.activation_speed = 1.0
+        """Initialize state to have reasonable parameters."""
+        carb_bg_ratio = 5.0
+        time_to_breakdown = 45.0
+        insulin_bg_ratio = 50.0
+        time_to_peak = 45.0
+        basal_rate = 0.0
+        digestion_speed = 1.0
+        activation_speed = 1.0
 
         # set state to initial
         self.S = [self.carb_bg_ratio, self.time_to_breakdown,
                   self.insulin_bg_ratio, self.time_to_peak,
                   self.basal_rate, self.digestion_speed,
                   self.activation_speed]
+                  
     def get_random_neighbor(self):
-        # TODO optimize function
-        attr_factors = [0.025, 0.5, 0.5, 0.5, 0.025, 0.05, 0.05]
+        """Get a new state that is very close to current."""
         r_mask = np.random.randint(0, 2, 7)
         r_exp = np.random.randint(0, 2, 7)
-        changes = r_mask*attr_factors*np.power(-1.0, r_exp)
+        changes = r_mask*self.attr_factors*np.power(-1.0, r_exp)
         Sp = self.S + changes
         basal_C = Sp[4]
         Sp = np.maximum(Sp, 0.0)
         Sp[4] = basal_C
         return Sp
-
-    def simulate_data(self, carb_bg_ratio, digestion_speed,
-                      time_to_breakdown, insulin_bg_ratio,
-                      time_to_peak, activation_speed, basal_delta):
+        
+    def simulate_data(self, S):
         """Simulate blood sugar response based on input parameters.
 
         Keyword arguments:
+        S -- State consisting of the following:
         carb_bg_ratio     -- Blood sugar rise per gram of carbohydrate.
         digestion_speed   -- The time it takes for half of carbs to be
-                                digested.
+                             digested.
         time_to_breakdown -- How long it takes for carbs to digest once
-                                they have started breaking down.
+                             they have started breaking down.
         insulin_bg_ratio  -- Blood sugar drop per unit of insulin.
         time_to_peak      -- The time it takes for half of insulin to be
                              activated.
@@ -123,6 +124,12 @@ class SigmoidFitProblem:
         Returns:
         list of simulated bg values.
         """
+        
+        # extract parameters from state to make equations clear
+        (carb_bg_ratio, time_to_breakdown, insulin_bg_ratio, 
+         time_to_peak, basal_delta, digestion_speed,
+         activation_speed) = S
+        
 
         # initialize blood glucose data
         simulated_data = np.full(self.bg_data.shape,
@@ -176,19 +183,13 @@ def simulated_annealing(problem, iterations=150000, T_init=1000,
                   (default 150,000)
     T_init     -- The initial temperature (default 1,000)
     T_decay    -- The exponential factor used to anneal the temperature
-                  (default 0.00018)
+                  (default 0.00015)
     """
-    # initialize parameters
+    # initialize parameters and get initial state
     problem.init_paramters()
 
     # get the response from the initial state
-    simulated = problem.simulate_data(carb_bg_ratio = problem.S[0],
-                                      digestion_speed = problem.S[5],
-                                      time_to_breakdown = problem.S[1],
-                                      insulin_bg_ratio = problem.S[2],
-                                      time_to_peak = problem.S[3],
-                                      activation_speed = problem.S[6],
-                                      basal_delta = problem.S[4])
+    simulated = problem.simulate_data(problem.S)
 
     # calculate initial error of state compared to target
     error = np.average(np.square(problem.bg_data - simulated))
@@ -205,13 +206,7 @@ def simulated_annealing(problem, iterations=150000, T_init=1000,
         Sp = problem.get_random_neighbor()
 
         # get the response from the new state
-        simulated = problem.simulate_data(carb_bg_ratio = Sp[0],
-                                          digestion_speed = Sp[5],
-                                          time_to_breakdown = Sp[1],
-                                          insulin_bg_ratio = Sp[2],
-                                          time_to_peak = Sp[3],
-                                          activation_speed = Sp[6],
-                                          basal_delta = Sp[4])
+        simulated = problem.simulate_data(Sp)
 
         # calculate error of new data compared to target
         new_error = np.average(np.square(problem.bg_data - simulated))
@@ -244,29 +239,26 @@ if __name__ == '__main__':
                      carbs = 8.0)
 
     # provide target data to problem
-    simulated = problem.simulate_data(carb_bg_ratio = 6.0,
-                                      digestion_speed = 1.0,
-                                      time_to_breakdown = 45.0,
-                                      insulin_bg_ratio = 80.0,
-                                      time_to_peak = 45.0,
-                                      activation_speed = 1.0,
-                                      basal_delta = -0.5)
+    carb_bg_ratio = 6.0
+    digestion_speed = 1.0
+    time_to_breakdown = 45.0
+    insulin_bg_ratio = 80.0
+    time_to_peak = 45.
+    activation_speed = 1.0
+    basal_rate = -0.5
+    S_fake = [carb_bg_ratio, time_to_breakdown, insulin_bg_ratio, time_to_peak,
+              basal_rate, digestion_speed, activation_speed]
+    fake_data = problem.simulate_data(S_fake)
 
     # set the actual data equal to the simulated data
-    problem.set_target_data(data = simulated)
+    problem.set_target_data(data = fake_data)
 
     # run simulated annealing to find most likely parameters
-    optimal_S = simulated_annealing(problem)
+    simulated_annealing(problem)
 
     # view final results
-    fitted = problem.simulate_data(carb_bg_ratio = problem.S[0],
-                                   digestion_speed = problem.S[5],
-                                   time_to_breakdown = problem.S[1],
-                                   insulin_bg_ratio = problem.S[2],
-                                   time_to_peak = problem.S[3],
-                                   activation_speed = problem.S[6],
-                                   basal_delta = problem.S[4])
+    fitted_data = problem.simulate_data(problem.S)
 
-    plt.plot(problem.time_data, problem.bg_data)
-    plt.plot(problem.time_data, fitted)
+    plt.plot(problem.time_data, fake_data)
+    plt.plot(problem.time_data, fitted_data)
     plt.show()
