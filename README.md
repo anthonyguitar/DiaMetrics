@@ -1,7 +1,12 @@
 # DiaMetricsLearner
-Modeling blood glucose response as a Markov Decision Process.
+Providing personalized insight to your Diabetes using data science.
 
-# Environments
+# Project 1 - Fitting Sigmoids 
+We fit sigmoids to Dexcom data to extract carbs-to-bg and insulin-to-bg curves. Basically, you'll know the expected bg for the next 3/4 hours before it happens. (uses simulated annealing and sigmoids to solve. each day is an episode and the average of the curves will be taken)
+
+# Project 2 - Q-Learning
+The next project will be choosing optimal actions to have really good bg control. This will start with q-learning and may also involve the simulated annealing results from project 1.
+
 ### BGEnvironment-v0
    *Description*
    
